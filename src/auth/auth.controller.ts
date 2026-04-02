@@ -43,9 +43,26 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Perfil del usuario autenticado' })
+  @ApiOperation({
+    summary: 'Perfil del usuario autenticado',
+    description:
+      'Incluye `permissionCodes` efectivos (roles + directos − denegados), recalculados en cada petición.',
+  })
   me(@CurrentUser() user: AuthUserPayload) {
     return this.authService.getProfile(user.userId);
+  }
+
+  @Post('refresh')
+  @HttpCode(200)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Renovar token',
+    description:
+      'Emite un nuevo JWT con la lista actual de permisos desde la base de datos.',
+  })
+  refresh(@CurrentUser() user: AuthUserPayload) {
+    return this.authService.issueTokensForUserId(user.userId);
   }
 
   @Get('google')

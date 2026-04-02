@@ -197,9 +197,10 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException();
     }
+    const permissionCodes = await this.getEffectivePermissionCodes(userId);
     const { passwordHash, ...safe } = user;
     void passwordHash;
-    return safe;
+    return { ...safe, permissionCodes };
   }
 
   async getEffectivePermissionCodes(userId: string): Promise<string[]> {

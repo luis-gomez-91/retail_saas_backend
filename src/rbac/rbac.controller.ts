@@ -14,7 +14,11 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
+import { PERMISSION_CODES } from '../common/permission-codes';
+import { Public } from '../auth/decorators/public.decorator';
+import { RequirePermissions } from '../auth/decorators/require-permissions.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import {
   AssignPermissionToRoleDto,
   AssignPermissionToUserDto,
@@ -33,30 +37,33 @@ import { RbacService } from './rbac.service';
 
 @ApiTags('rbac')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions(PERMISSION_CODES.RBAC_MANAGE)
 @Controller('rbac')
 export class RbacController {
   constructor(private readonly rbacService: RbacService) {}
 
-  // --- identification-types ---
+  // --- identification-types (lectura pública para registro / catálogos) ---
 
-  @Post('identification-types')
-  @ApiOperation({ summary: 'Crear tipo de identificación' })
-  createIdentificationType(@Body() dto: CreateIdentificationTypeDto) {
-    return this.rbacService.createIdentificationType(dto);
-  }
-
+  @Public()
   @Get('identification-types')
   @ApiOperation({ summary: 'Listar tipos de identificación' })
   findAllIdentificationTypes() {
     return this.rbacService.findAllIdentificationTypes();
   }
 
+  @Public()
   @Get('identification-types/:id')
   @ApiOperation({ summary: 'Obtener tipo de identificación' })
   @ApiParam({ name: 'id' })
   findIdentificationTypeById(@Param('id') id: string) {
     return this.rbacService.findIdentificationTypeById(id);
+  }
+
+  @Post('identification-types')
+  @ApiOperation({ summary: 'Crear tipo de identificación' })
+  createIdentificationType(@Body() dto: CreateIdentificationTypeDto) {
+    return this.rbacService.createIdentificationType(dto);
   }
 
   @Patch('identification-types/:id')
@@ -69,8 +76,16 @@ export class RbacController {
     return this.rbacService.updateIdentificationType(id, dto);
   }
 
-  // --- auth providers ---
+  @Delete('identification-types/:id')
+  @ApiOperation({ summary: 'Eliminar tipo de identificación' })
+  @ApiParam({ name: 'id' })
+  deleteIdentificationType(@Param('id') id: string) {
+    return this.rbacService.deleteIdentificationType(id);
+  }
 
+  // --- auth providers (lectura pública) ---
+
+  @Public()
   @Get('auth-providers')
   @ApiOperation({ summary: 'Listar proveedores OAuth configurables' })
   findAuthProviders() {
@@ -103,6 +118,13 @@ export class RbacController {
   @ApiParam({ name: 'id' })
   updateRole(@Param('id') id: string, @Body() dto: UpdateRoleDto) {
     return this.rbacService.updateRole(id, dto);
+  }
+
+  @Delete('roles/:id')
+  @ApiOperation({ summary: 'Eliminar rol' })
+  @ApiParam({ name: 'id' })
+  deleteRole(@Param('id') id: string) {
+    return this.rbacService.deleteRole(id);
   }
 
   @Post('roles/:roleId/permissions')
@@ -154,7 +176,21 @@ export class RbacController {
     return this.rbacService.updatePermission(id, dto);
   }
 
+  @Delete('permissions/:id')
+  @ApiOperation({ summary: 'Eliminar permiso del catálogo' })
+  @ApiParam({ name: 'id' })
+  deletePermission(@Param('id') id: string) {
+    return this.rbacService.deletePermission(id);
+  }
+
   // --- user roles ---
+
+  @Get('users/:userId/roles')
+  @ApiOperation({ summary: 'Listar roles asignados al usuario' })
+  @ApiParam({ name: 'userId' })
+  listRolesForUser(@Param('userId') userId: string) {
+    return this.rbacService.listRolesForUser(userId);
+  }
 
   @Post('users/:userId/roles')
   @ApiOperation({ summary: 'Asignar rol a usuario (tabla auth_user_role)' })

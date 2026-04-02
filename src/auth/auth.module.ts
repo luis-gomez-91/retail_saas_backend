@@ -6,6 +6,8 @@ import { PassportModule } from '@nestjs/passport';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { PermissionsGuard } from './guards/permissions.guard';
+import { SelfOrPermissionGuard } from './guards/self-or-permission.guard';
 import { FacebookStrategy } from './strategies/facebook.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -52,9 +54,16 @@ export class AuthModule {
         AuthService,
         JwtStrategy,
         LocalStrategy,
+        PermissionsGuard,
+        SelfOrPermissionGuard,
         ...(strategies as Provider[]),
       ],
-      exports: [AuthService, JwtModule],
+      exports: [
+        AuthService,
+        JwtModule,
+        PermissionsGuard,
+        SelfOrPermissionGuard,
+      ],
     };
   }
 }

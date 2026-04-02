@@ -57,6 +57,12 @@ export class RbacService {
     });
   }
 
+  async deleteIdentificationType(id: string) {
+    await this.findIdentificationTypeById(id);
+    await this.prisma.identificationType.delete({ where: { id } });
+    return { ok: true };
+  }
+
   // --- Proveedores OAuth (catálogo) ---
 
   findAllAuthProviders() {
@@ -115,6 +121,12 @@ export class RbacService {
     } catch {
       throw new ConflictException('Código de rol duplicado');
     }
+  }
+
+  async deleteRole(id: string) {
+    await this.findRoleById(id);
+    await this.prisma.role.delete({ where: { id } });
+    return { ok: true };
   }
 
   async addPermissionToRole(roleId: string, permissionId: string) {
@@ -186,6 +198,12 @@ export class RbacService {
     }
   }
 
+  async deletePermission(id: string) {
+    await this.findPermissionById(id);
+    await this.prisma.permission.delete({ where: { id } });
+    return { ok: true };
+  }
+
   // --- Usuario ↔ roles (auth_user_role) ---
 
   async addRoleToUser(userId: string, roleId: string) {
@@ -207,6 +225,22 @@ export class RbacService {
       throw new NotFoundException('Asignación usuario-rol no encontrada');
     }
     return { ok: true };
+  }
+
+  async listRolesForUser(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('Usuario no encontrado');
+    return this.prisma.userRole.findMany({
+      where: { userId },
+      include: {
+        role: {
+          include: {
+            rolePermissions: { include: { permission: true } },
+          },
+        },
+      },
+      orderBy: { role: { code: 'asc' } },
+    });
   }
 
   // --- Usuario ↔ permisos directos (auth_user_permission) ---
