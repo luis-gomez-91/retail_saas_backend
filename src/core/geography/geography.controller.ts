@@ -25,7 +25,7 @@ export class GeographyController {
 
   @Get('countries/:id')
   @ApiOperation({ summary: 'Obtener país por id' })
-  @ApiParam({ name: 'id', description: 'ID del país (cuid)' })
+  @ApiParam({ name: 'id', description: 'ID del país (UUID)' })
   findCountryById(@Param('id') id: string) {
     return this.geographyService.findCountryById(id);
   }
@@ -44,7 +44,7 @@ export class GeographyController {
 
   @Get('division-types/:id')
   @ApiOperation({ summary: 'Obtener tipo de división por id' })
-  @ApiParam({ name: 'id', description: 'ID del tipo (cuid)' })
+  @ApiParam({ name: 'id', description: 'ID del tipo (UUID)' })
   findDivisionTypeById(@Param('id') id: string) {
     return this.geographyService.findDivisionTypeById(id);
   }
@@ -63,14 +63,14 @@ export class GeographyController {
 
   @Get('administrative-divisions/:id')
   @ApiOperation({ summary: 'Obtener división administrativa por id' })
-  @ApiParam({ name: 'id', description: 'ID de la división (cuid)' })
+  @ApiParam({ name: 'id', description: 'ID de la división (UUID)' })
   findAdministrativeDivisionById(@Param('id') id: string) {
     return this.geographyService.findAdministrativeDivisionById(id);
   }
 
   @Patch('administrative-divisions/:id')
   @ApiOperation({ summary: 'Actualizar división administrativa' })
-  @ApiParam({ name: 'id', description: 'ID de la división (cuid)' })
+  @ApiParam({ name: 'id', description: 'ID de la división (UUID)' })
   updateAdministrativeDivision(
     @Param('id') id: string,
     @Body() dto: UpdateAdministrativeDivisionDto,

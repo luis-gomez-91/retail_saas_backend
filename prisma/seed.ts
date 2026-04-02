@@ -1,6 +1,14 @@
+import { config as loadEnv } from 'dotenv';
+import { resolve } from 'path';
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+
+// Prisma CLI carga .env para sí mismo; el subproceso de ts-node a veces no hereda
+// BOOTSTRAP_* y otras claves. Forzamos la carga desde la raíz del proyecto.
+loadEnv({ path: resolve(__dirname, '..', '.env') });
 
 const prisma = new PrismaClient();
+const BCRYPT_ROUNDS = 10;
 
 const PERMISSION_SEED = [
   {
@@ -85,10 +93,46 @@ async function main() {
   }
 
   const bootstrapEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
+  const bootstrapPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD?.trim();
+
   if (bootstrapEmail) {
-    const user = await prisma.user.findUnique({
+    let user = await prisma.user.findUnique({
       where: { email: bootstrapEmail },
     });
+
+    if (!user && bootstrapPassword) {
+      const firstName =
+        process.env.BOOTSTRAP_ADMIN_FIRST_NAME?.trim() || 'Admin';
+      const lastName =
+        process.env.BOOTSTRAP_ADMIN_LAST_NAME?.trim() || 'Sistema';
+      if (bootstrapPassword.length < 8) {
+        console.warn(
+          'BOOTSTRAP_ADMIN_PASSWORD debe tener al menos 8 caracteres; no se creó usuario.',
+        );
+      } else {
+        const passwordHash = await bcrypt.hash(bootstrapPassword, BCRYPT_ROUNDS);
+        user = await prisma.$transaction(async (tx) => {
+          const person = await tx.person.create({
+            data: {
+              firstName,
+              lastName,
+              emailPersonal: bootstrapEmail,
+            },
+          });
+          return tx.user.create({
+            data: {
+              email: bootstrapEmail,
+              passwordHash,
+              personId: person.id,
+            },
+          });
+        });
+        console.log(
+          `Usuario administrador creado (${bootstrapEmail}). Asignando SUPER_ADMIN…`,
+        );
+      }
+    }
+
     if (user) {
       await prisma.userRole.upsert({
         where: {
@@ -98,9 +142,10 @@ async function main() {
         update: {},
       });
       console.log(`Rol SUPER_ADMIN asignado a ${bootstrapEmail}.`);
-    } else {
+    } else if (!bootstrapPassword) {
       console.warn(
-        `BOOTSTRAP_ADMIN_EMAIL=${bootstrapEmail}: usuario no encontrado; omitiendo asignación.`,
+        `BOOTSTRAP_ADMIN_EMAIL=${bootstrapEmail}: usuario no encontrado. ` +
+          'Regístrate con POST /auth/register o define BOOTSTRAP_ADMIN_PASSWORD y vuelve a ejecutar el seed.',
       );
     }
   }

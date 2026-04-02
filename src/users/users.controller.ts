@@ -58,7 +58,7 @@ export class UsersController {
   @UseGuards(SelfOrPermissionGuard)
   @SelfOrPermission(PERMISSION_CODES.USERS_READ, 'id')
   @ApiOperation({ summary: 'Obtener usuario por id' })
-  @ApiParam({ name: 'id', description: 'ID del usuario (cuid)' })
+  @ApiParam({ name: 'id', description: 'ID del usuario (UUID)' })
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
   }
@@ -67,7 +67,7 @@ export class UsersController {
   @UseGuards(SelfOrPermissionGuard)
   @SelfOrPermission(PERMISSION_CODES.USERS_UPDATE, 'id')
   @ApiOperation({ summary: 'Actualizar usuario y datos de persona' })
-  @ApiParam({ name: 'id', description: 'ID del usuario (cuid)' })
+  @ApiParam({ name: 'id', description: 'ID del usuario (UUID)' })
   update(
     @Param('id') id: string,
     @Body() dto: UpdateUserDto,

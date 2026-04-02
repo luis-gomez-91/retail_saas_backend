@@ -12,7 +12,7 @@ datasource db {
 // --- Geografía (core) ---
 
 model Country {
-  id   String @id @default(cuid())
+  id   String @id @default(uuid())
   name String @db.VarChar(100)
   code String @db.VarChar(2)
 
@@ -27,7 +27,7 @@ model Country {
 }
 
 model DivisionType {
-  id    String @id @default(cuid())
+  id    String @id @default(uuid())
   name  String @db.VarChar(50)
   level Int
 
@@ -44,7 +44,7 @@ model DivisionType {
 }
 
 model AdministrativeDivision {
-  id   String  @id @default(cuid())
+  id   String  @id @default(uuid())
   name String  @db.VarChar(100)
   code String? @db.VarChar(10)
 
@@ -72,7 +72,7 @@ model AdministrativeDivision {
 
 /// Catálogo de proveedores OAuth (Google, Facebook, etc.). El login por correo/clave no requiere fila aquí.
 model AuthProvider {
-  id   String @id @default(cuid())
+  id   String @id @default(uuid())
   code String @unique @db.VarChar(32)
   name String @db.VarChar(80)
 
@@ -86,7 +86,7 @@ model AuthProvider {
 
 /// Tipos de documento de identificación (CC, CE, pasaporte, NIT, etc.)
 model IdentificationType {
-  id   String @id @default(cuid())
+  id   String @id @default(uuid())
   code String @unique @db.VarChar(32)
   name String @db.VarChar(80)
 
@@ -100,7 +100,7 @@ model IdentificationType {
 
 /// Datos demográficos y de contacto; un usuario de login enlaza 1:1 con una persona.
 model Person {
-  id        String @id @default(cuid())
+  id        String @id @default(uuid())
   firstName String @map("first_name") @db.VarChar(100)
   lastName  String @map("last_name") @db.VarChar(100)
 
@@ -142,7 +142,7 @@ model Person {
 
 /// Cuenta de acceso: correo + hash de clave; enlazada a Persona.
 model User {
-  id           String  @id @default(cuid())
+  id           String  @id @default(uuid())
   email        String  @unique @db.VarChar(255)
   passwordHash String? @map("password_hash") @db.VarChar(255)
 
@@ -164,7 +164,7 @@ model User {
 
 /// Vinculación OAuth: un usuario puede tener varias cuentas de proveedores.
 model UserAuthAccount {
-  id String @id @default(cuid())
+  id String @id @default(uuid())
 
   userId String @map("user_id")
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -184,7 +184,7 @@ model UserAuthAccount {
 }
 
 model Role {
-  id          String  @id @default(cuid())
+  id          String  @id @default(uuid())
   code        String  @unique @db.VarChar(64)
   name        String  @db.VarChar(120)
   description String? @db.VarChar(500)
@@ -199,7 +199,7 @@ model Role {
 }
 
 model Permission {
-  id          String  @id @default(cuid())
+  id          String  @id @default(uuid())
   code        String  @unique @db.VarChar(128)
   name        String  @db.VarChar(120)
   description String? @db.VarChar(500)
