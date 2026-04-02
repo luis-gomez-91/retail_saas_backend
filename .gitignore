@@ -1,0 +1,41 @@
+# Dependencias
+node_modules/
+
+# Compilado
+dist/
+build/
+*.tsbuildinfo
+
+# Variables de entorno (nunca subir secretos)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Prisma (rutas generadas personalizadas, si existen)
+/generated/prisma
+
+# Tests y cobertura
+coverage/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# SO
+.DS_Store
+Thumbs.db
+
+# IDE y editores
+.idea/
+*.swp
+*.swo
+.vscode/*
+!.vscode/extensions.json
+
+# Certificados y claves locales
+*.pem

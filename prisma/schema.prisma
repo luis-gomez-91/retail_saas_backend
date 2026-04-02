@@ -1,0 +1,248 @@
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- Geografía (core) ---
+
+model Country {
+  id   String @id @default(cuid())
+  name String @db.VarChar(100)
+  code String @db.VarChar(2)
+
+  divisionTypes           DivisionType[]
+  administrativeDivisions AdministrativeDivision[]
+  persons                 Person[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("core_country")
+}
+
+model DivisionType {
+  id    String @id @default(cuid())
+  name  String @db.VarChar(50)
+  level Int
+
+  countryId String?
+  country   Country? @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  administrativeDivisions AdministrativeDivision[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, countryId])
+  @@map("core_division_type")
+}
+
+model AdministrativeDivision {
+  id   String  @id @default(cuid())
+  name String  @db.VarChar(100)
+  code String? @db.VarChar(10)
+
+  countryId String
+  country   Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  parentId String?
+  parent   AdministrativeDivision?  @relation("DivisionHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children AdministrativeDivision[] @relation("DivisionHierarchy")
+
+  divisionTypeId String
+  divisionType   DivisionType @relation(fields: [divisionTypeId], references: [id], onDelete: Restrict)
+
+  personsPersonaDivision Person[] @relation("PersonaDivision")
+  personsPersonaCity     Person[] @relation("PersonaCity")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, parentId, countryId])
+  @@map("core_administrative_division")
+}
+
+// --- Identidad / IAM ---
+
+/// Catálogo de proveedores OAuth (Google, Facebook, etc.). El login por correo/clave no requiere fila aquí.
+model AuthProvider {
+  id   String @id @default(cuid())
+  code String @unique @db.VarChar(32)
+  name String @db.VarChar(80)
+
+  userAccounts UserAuthAccount[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("auth_provider")
+}
+
+/// Tipos de documento de identificación (CC, CE, pasaporte, NIT, etc.)
+model IdentificationType {
+  id   String @id @default(cuid())
+  code String @unique @db.VarChar(32)
+  name String @db.VarChar(80)
+
+  persons Person[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("auth_identification_type")
+}
+
+/// Datos demográficos y de contacto; un usuario de login enlaza 1:1 con una persona.
+model Person {
+  id        String @id @default(cuid())
+  firstName String @map("first_name") @db.VarChar(100)
+  lastName  String @map("last_name") @db.VarChar(100)
+
+  identification           String? @db.VarChar(64)
+  identificationTypeId     String? @map("identification_type_id")
+  identificationType       IdentificationType? @relation(fields: [identificationTypeId], references: [id], onDelete: SetNull)
+  birthDate                DateTime? @map("birth_date") @db.Date
+
+  emailInstitutional String? @map("email_institutional") @db.VarChar(255)
+  emailPersonal      String? @map("email_personal") @db.VarChar(255)
+  phone              String? @db.VarChar(40)
+
+  countryId String? @map("country_id")
+  country   Country? @relation(fields: [countryId], references: [id], onDelete: SetNull)
+
+  /// División administrativa principal (ej. departamento/estado)
+  administrativeDivisionId String? @map("administrative_division_id")
+  administrativeDivision   AdministrativeDivision? @relation("PersonaDivision", fields: [administrativeDivisionId], references: [id], onDelete: SetNull)
+
+  /// Ciudad o subdivisión más específica cuando aplica
+  cityDivisionId String? @map("city_division_id")
+  cityDivision   AdministrativeDivision? @relation("PersonaCity", fields: [cityDivisionId], references: [id], onDelete: SetNull)
+
+  addressLine1 String? @map("address_line1") @db.VarChar(255)
+  addressLine2 String? @map("address_line2") @db.VarChar(255)
+  postalCode   String? @map("postal_code") @db.VarChar(20)
+  timezone     String? @db.VarChar(64)
+
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
+
+  user User?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("auth_person")
+}
+
+/// Cuenta de acceso: correo + hash de clave; enlazada a Persona.
+model User {
+  id           String  @id @default(cuid())
+  email        String  @unique @db.VarChar(255)
+  passwordHash String? @map("password_hash") @db.VarChar(255)
+
+  isActive      Boolean @default(true) @map("is_active")
+  emailVerified Boolean @default(false) @map("email_verified")
+
+  personId String @unique @map("person_id")
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  authAccounts     UserAuthAccount[]
+  userRoles        UserRole[]
+  userPermissions  UserPermission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("auth_user")
+}
+
+/// Vinculación OAuth: un usuario puede tener varias cuentas de proveedores.
+model UserAuthAccount {
+  id String @id @default(cuid())
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  authProviderId String       @map("auth_provider_id")
+  authProvider   AuthProvider @relation(fields: [authProviderId], references: [id], onDelete: Cascade)
+
+  /// Identificador estable del proveedor (sub, id de Facebook, etc.)
+  externalUserId String  @map("external_user_id") @db.VarChar(255)
+  emailAtLink    String? @map("email_at_link") @db.VarChar(255)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([authProviderId, externalUserId])
+  @@map("auth_user_auth_account")
+}
+
+model Role {
+  id          String  @id @default(cuid())
+  code        String  @unique @db.VarChar(64)
+  name        String  @db.VarChar(120)
+  description String? @db.VarChar(500)
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("auth_role")
+}
+
+model Permission {
+  id          String  @id @default(cuid())
+  code        String  @unique @db.VarChar(128)
+  name        String  @db.VarChar(120)
+  description String? @db.VarChar(500)
+
+  rolePermissions RolePermission[]
+  userPermissions UserPermission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("auth_permission")
+}
+
+model RolePermission {
+  roleId       String @map("role_id")
+  role         Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("auth_role_permission")
+}
+
+model UserRole {
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId String @map("role_id")
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("auth_user_role")
+}
+
+/// Permisos directos por usuario. `granted`: true = conceder; false = denegar explícita (prevalece sobre roles).
+model UserPermission {
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  permissionId String     @map("permission_id")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  granted Boolean @default(true)
+
+  @@id([userId, permissionId])
+  @@map("auth_user_permission")
+}
