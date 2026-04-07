@@ -138,7 +138,7 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Modelo de usuario para ForeignKey/OneToOne que usan settings.AUTH_USER_MODEL.
-AUTH_USER_MODEL = 'core.User'
+AUTH_USER_MODEL = 'core.Usuario'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -167,8 +167,8 @@ SPECTACULAR_SETTINGS = {
         'Autenticación con **JWT** (Bearer).\n\n'
         '- **Lectura** (`GET`): usuario autenticado; sin `is_staff` los listados se filtran por '
         'membresías activas a empresas.\n'
-        '- **Escritura** (`POST`, `PUT`, `PATCH`, `DELETE`): requiere **`is_staff`**, salvo '
-        'notas en `Person` (cada uno puede editar su propio perfil; crear/borrar `Person` es staff).'
+        '- **Escritura** (`POST`, `PUT`, `PATCH`, `DELETE`): requiere **`is_staff`** o **`is_superuser`**, salvo '
+        'notas en `Person` (cada uno puede editar su propio perfil; crear/borrar `Person` es staff/superusuario).'
     ),
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
@@ -185,7 +185,7 @@ SPECTACULAR_SETTINGS = {
         },
         {
             'name': 'Catálogo y RBAC',
-            'description': 'Módulos, permisos, roles, planes, estados de suscripción y vínculos plan–módulo.',
+            'description': 'Módulos, roles (módulos por rol), planes, estados de suscripción y vínculos plan–módulo.',
         },
         {
             'name': 'Facturación y suscripciones',

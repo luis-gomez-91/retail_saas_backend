@@ -3,29 +3,25 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from core.models import (
-    AppPermission,
-    AuthProvider,
-    BillingAccount,
+    CuentaFacturacion,
     Empresa,
-    Module,
-    ModuleRole,
-    Person,
-    PersonEmpresa,
-    PersonRoleAssignment,
+    EstadoSuscripcion,
+    Modulo,
+    Persona,
+    PersonaEmpresa,
     Plan,
-    PlanModule,
-    Role,
-    Subscription,
-    SubscriptionStatus,
-    UserIdentity,
+    PlanModulo,
+    RolEmpresa,
+    RolPersonaEmpresa,
+    Suscripcion,
 )
 
-User = get_user_model()
+Usuario = get_user_model()
 
 
 class Command(BaseCommand):
     help = (
-        'Crea catálogo inicial: módulos, planes (3 niveles), permisos de ejemplo y '
+        'Crea catálogo inicial: módulos, planes (3 niveles), roles con módulos de ejemplo y '
         'una cuenta demo opcional.'
     )
 
@@ -43,92 +39,100 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
-        for code, name, order in [
-            ('password', 'Contraseña', 0),
-            ('google', 'Google', 1),
-            ('microsoft', 'Microsoft', 2),
-            ('oidc', 'OpenID Connect', 3),
-            ('saml', 'SAML', 4),
-        ]:
-            AuthProvider.objects.get_or_create(
-                code=code,
-                defaults={'name': name, 'sort_order': order},
-            )
-        for code, name, order in [
+        for codigo, nombre, orden in [
             ('trialing', 'En prueba', 0),
             ('active', 'Activa', 1),
             ('past_due', 'Pago vencido', 2),
             ('canceled', 'Cancelada', 3),
             ('paused', 'Pausada', 4),
         ]:
-            SubscriptionStatus.objects.get_or_create(
-                code=code,
-                defaults={'name': name, 'sort_order': order},
+            EstadoSuscripcion.objects.get_or_create(
+                codigo=codigo,
+                defaults={'nombre': nombre, 'orden': orden},
             )
 
         modules_data = [
-            ('core', 'Core', 'Administración y ajustes base'),
-            ('inventario', 'Inventario', 'Stock y productos'),
-            ('rrhh', 'RRHH', 'Empleados y nómina'),
+            ('dashboard', 'Dashboard', 'Inicio, KPIs y accesos rápidos', 'LayoutDashboard'),
+            ('productos', 'Productos', 'Catálogo, stock y precios', 'Package'),
+            ('ventas', 'Ventas', 'POS, tickets y cobros', 'ShoppingCart'),
+            ('reportes', 'Reportes', 'Informes y exportaciones', 'BarChart3'),
+            ('modulos', 'Módulos', 'Catálogo de módulos del producto', 'Boxes'),
+            ('personas', 'Personas', 'Usuarios y fichas de persona', 'Users'),
+            ('planes', 'Planes', 'Planes comerciales', 'Layers'),
+            ('suscripciones', 'Suscripciones', 'Suscripciones y estado de facturación', 'WalletCards'),
+            ('roles', 'Roles', 'Roles y permisos por módulo', 'Shield'),
+            ('empresas', 'Empresas', 'Empresas (tenants)', 'Building2'),
+            ('organizaciones', 'Organizaciones', 'Organizaciones por empresa', 'Network'),
+            ('sucursales', 'Sucursales', 'Sucursales y puntos de venta', 'Store'),
         ]
         modules = {}
-        for code, name, desc in modules_data:
-            m, _ = Module.objects.update_or_create(
-                code=code,
-                defaults={'name': name, 'description': desc},
+        for codigo, nombre, desc, icono in modules_data:
+            m, _ = Modulo.objects.update_or_create(
+                codigo=codigo,
+                defaults={'nombre': nombre, 'descripcion': desc, 'icono': icono},
             )
-            modules[code] = m
+            modules[codigo] = m
 
         plans_data = [
-            ('basico', 'Básico', 1, 2, 5, ['core', 'inventario']),
-            ('pro', 'Pro', 3, 10, 50, ['core', 'inventario', 'rrhh']),
-            ('enterprise', 'Enterprise', None, None, None, ['core', 'inventario', 'rrhh']),
+            ('basico', 'Básico', 1, 2, 5, ['dashboard', 'productos', 'ventas']),
+            ('pro', 'Pro', 3, 10, 50, ['dashboard', 'productos', 'ventas', 'reportes']),
+            (
+                'enterprise',
+                'Enterprise',
+                None,
+                None,
+                None,
+                [
+                    'dashboard',
+                    'productos',
+                    'ventas',
+                    'reportes',
+                    'modulos',
+                    'personas',
+                    'planes',
+                    'suscripciones',
+                    'roles',
+                    'empresas',
+                    'organizaciones',
+                    'sucursales',
+                ],
+            ),
         ]
         plans = {}
-        for code, name, max_e, max_o, max_s, mod_codes in plans_data:
+        for codigo, nombre, max_e, max_o, max_s, mod_codes in plans_data:
             plan, _ = Plan.objects.update_or_create(
-                code=code,
+                codigo=codigo,
                 defaults={
-                    'name': name,
-                    'is_public': True,
+                    'nombre': nombre,
+                    'publico': True,
                     'max_empresas': max_e,
                     'max_organizaciones': max_o,
                     'max_sucursales': max_s,
                 },
             )
-            plans[code] = plan
-            PlanModule.objects.filter(plan=plan).delete()
+            plans[codigo] = plan
+            PlanModulo.objects.filter(plan=plan).delete()
             for mc in mod_codes:
-                PlanModule.objects.get_or_create(plan=plan, module=modules[mc])
+                PlanModulo.objects.get_or_create(plan=plan, modulo=modules[mc])
 
-        perms_data = [
-            ('inventario.producto.view', 'Ver productos', 'inventario'),
-            ('inventario.producto.edit', 'Editar productos', 'inventario'),
-            ('rrhh.empleado.view', 'Ver empleados', 'rrhh'),
-            ('rrhh.empleado.edit', 'Editar empleados', 'rrhh'),
-        ]
-        perms = {}
-        for code, name, mod_code in perms_data:
-            p, _ = AppPermission.objects.update_or_create(
-                code=code,
-                defaults={'name': name, 'module': modules[mod_code]},
-            )
-            perms[code] = p
-
-        role_admin, _ = Role.objects.update_or_create(
-            code='admin-empresa',
-            defaults={'name': 'Administrador de empresa'},
+        role_admin, _ = RolEmpresa.objects.update_or_create(
+            codigo='admin-empresa',
+            defaults={'nombre': 'Administrador de empresa'},
         )
-        role_admin.permissions.set(perms.values())
-        for mod_code in ['core', 'inventario', 'rrhh']:
-            ModuleRole.objects.get_or_create(role=role_admin, module=modules[mod_code])
-
-        role_cajero, _ = Role.objects.update_or_create(
-            code='cajero',
-            defaults={'name': 'Cajero'},
+        role_admin.establecer_modulos(
+            [
+                modules['dashboard'],
+                modules['productos'],
+                modules['ventas'],
+                modules['reportes'],
+            ]
         )
-        role_cajero.permissions.set([perms['inventario.producto.view']])
-        ModuleRole.objects.get_or_create(role=role_cajero, module=modules['inventario'])
+
+        role_cajero, _ = RolEmpresa.objects.update_or_create(
+            codigo='cajero',
+            defaults={'nombre': 'Cajero'},
+        )
+        role_cajero.establecer_modulos([modules['dashboard'], modules['ventas']])
 
         self.stdout.write(self.style.SUCCESS('Catálogo SaaS sembrado correctamente.'))
 
@@ -136,19 +140,19 @@ class Command(BaseCommand):
             self._seed_demo(plans['pro'], options['demo_username'])
 
     def _seed_demo(self, plan: Plan, demo_username: str) -> None:
-        ba, _ = BillingAccount.objects.get_or_create(name='Demo Billing')
+        cf, _ = CuentaFacturacion.objects.get_or_create(nombre='Demo Billing')
         sub = (
-            ba.subscriptions.filter(status__code__in=('active', 'trialing'))
+            cf.suscripciones.filter(estado__codigo__in=('active', 'trialing'))
             .first()
         )
         if not sub:
-            active_status = SubscriptionStatus.objects.get(code='active')
-            sub = Subscription.objects.create(
-                billing_account=ba,
+            active_status = EstadoSuscripcion.objects.get(codigo='active')
+            sub = Suscripcion.objects.create(
+                cuenta_facturacion=cf,
                 plan=plan,
-                status=active_status,
+                estado=active_status,
             )
-        user, created = User.objects.get_or_create(
+        user, created = Usuario.objects.get_or_create(
             username=demo_username,
             defaults={
                 'is_staff': True,
@@ -158,44 +162,38 @@ class Command(BaseCommand):
         if created:
             user.set_password('demo1234')
             user.save()
-        person, _ = Person.objects.update_or_create(
-            user=user,
+        persona, _ = Persona.objects.update_or_create(
+            usuario=user,
             defaults={
-                'name': 'Admin',
-                'last_name': 'Demo',
-                'second_last_name': '',
-                'personal_email': '',
-                'phone': '',
+                'nombre': 'Admin',
+                'apellido_paterno': 'Demo',
+                'apellido_materno': '',
+                'correo_personal': '',
+                'telefono': '',
             },
         )
-        pwd_provider = AuthProvider.objects.get(code='password')
-        UserIdentity.objects.get_or_create(
-            user=user,
-            provider=pwd_provider,
-            provider_uid='',
-            defaults={'is_primary': True},
-        )
-        empresa, _ = Empresa.objects.get_or_create(
-            billing_account=ba,
-            slug='demo',
-            defaults={'name': 'Empresa Demo'},
-        )
-        PersonEmpresa.objects.get_or_create(
-            person=person,
+        try:
+            empresa = Empresa.objects.get(cuenta_facturacion=cf, slug='demo')
+        except Empresa.DoesNotExist:
+            empresa = Empresa(
+                cuenta_facturacion=cf,
+                slug='demo',
+                nombre='Empresa Demo',
+            )
+            empresa.save(skip_quota_check=True)
+        PersonaEmpresa.objects.get_or_create(
+            persona=persona,
             empresa=empresa,
-            defaults={'is_active': True},
+            defaults={'activa': True},
         )
-        admin_role = Role.objects.get(code='admin-empresa')
-        PersonRoleAssignment.objects.get_or_create(
-            person=person,
-            role=admin_role,
-            empresa=empresa,
-            organizacion=None,
-            sucursal=None,
+        admin_role = RolEmpresa.objects.get(codigo='admin-empresa')
+        RolPersonaEmpresa.objects.get_or_create(
+            persona=persona,
+            rol=admin_role,
         )
         self.stdout.write(
             self.style.SUCCESS(
-                f'Demo: cuenta "{ba.name}", plan {plan.code}, empresa "{empresa.slug}", '
+                f'Demo: cuenta "{cf.nombre}", plan {plan.codigo}, empresa "{empresa.slug}", '
                 f'usuario {demo_username} / demo1234'
             )
         )

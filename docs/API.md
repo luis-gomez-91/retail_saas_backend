@@ -81,7 +81,6 @@ curl -s "$BASE/api/users/me/" -H "Authorization: Bearer $ACCESS"
 | Usuario autenticado, **sin** `is_staff` | **GET**: datos filtrados a sus empresas (membresías activas) donde aplica; **POST/PUT/PATCH/DELETE**: en la mayoría de recursos solo **staff**. |
 | Usuario con `is_staff` | Acceso completo CRUD según la vista (sin filtro de tenant en listados). |
 | **`Person`** | Cada usuario puede **ver/editar** su propia persona; **crear/borrar** personas: **staff**. |
-| **`UserIdentity`** | Lectura de identidades propias; **escritura**: **staff**. |
 | **`User`** | Solo **lectura**; sin staff solo ve su propio usuario. |
 
 ---
@@ -104,17 +103,13 @@ Todos bajo `/api/` (trailing slash según `APPEND_SLASH` de Django).
 |---------|---------------------------|
 | Usuarios (`User`) | `/api/users/` |
 | Personas (`Person`) | `/api/persons/` |
-| Proveedores de auth | `/api/auth-providers/` |
-| Identidades de usuario | `/api/user-identities/` |
 
 ### Catálogo y RBAC
 
 | Recurso | Ruta base |
 |---------|-----------|
 | Módulos | `/api/modules/` |
-| Permisos de app | `/api/app-permissions/` |
-| Roles | `/api/roles/` (en escritura: `permission_ids` para el M2M) |
-| Módulo por rol | `/api/module-roles/` |
+| Roles | `/api/roles/` (en escritura: `module_ids` para el M2M rol ↔ módulos) |
 | Planes | `/api/plans/` (lectura incluye `module_ids`) |
 | Plan ↔ módulo | `/api/plan-modules/` |
 | Estados de suscripción | `/api/subscription-statuses/` |

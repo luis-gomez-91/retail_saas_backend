@@ -3,23 +3,19 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions, viewsets
 
 from core.models import (
-    AppPermission,
-    AuthProvider,
-    BillingAccount,
+    CuentaFacturacion,
     Empresa,
-    Module,
-    ModuleRole,
+    EstadoSuscripcion,
+    Modulo,
     Organizacion,
-    Person,
-    PersonEmpresa,
-    PersonRoleAssignment,
+    Persona,
+    PersonaEmpresa,
     Plan,
-    PlanModule,
-    Role,
-    Subscription,
-    SubscriptionStatus,
+    PlanModulo,
+    RolEmpresa,
+    RolPersonaEmpresa,
+    Suscripcion,
     Sucursal,
-    UserIdentity,
 )
 
 from core.api import serializers
@@ -31,9 +27,14 @@ from core.api.openapi import (
     tag_model_viewset,
     tag_read_only,
 )
-from core.api.permissions import IsStaffMember, IsStaffOrReadOnly, PersonObjectPermission
+from core.api.permissions import (
+    IsStaffMember,
+    IsStaffOrReadOnly,
+    PersonaObjectPermission,
+    is_staff_super_or_admin,
+)
 
-User = get_user_model()
+Usuario = get_user_model()
 
 
 def _openapi_unscoped(view) -> bool:
@@ -44,36 +45,39 @@ def _active_empresa_ids(user):
     if not user.is_authenticated:
         return []
     try:
-        person = user.person
-    except Person.DoesNotExist:
+        persona = user.persona
+    except Persona.DoesNotExist:
         return []
     return list(
-        PersonEmpresa.objects.filter(person=person, is_active=True).values_list(
+        PersonaEmpresa.objects.filter(persona=persona, activa=True).values_list(
             'empresa_id', flat=True
         )
     )
 
 
-def _billing_account_ids_for_user(user):
-    if user.is_staff:
+def _cuenta_facturacion_ids_for_user(user):
+    if is_staff_super_or_admin(user):
         return None
     eids = _active_empresa_ids(user)
     if not eids:
         return []
     return list(
         Empresa.objects.filter(id__in=eids)
-        .values_list('billing_account_id', flat=True)
+        .values_list('cuenta_facturacion_id', flat=True)
         .distinct()
     )
 
 
 @extend_schema(
     summary='Usuario autenticado actual',
-    description='Devuelve el registro del usuario asociado al JWT (sin contraseña).',
+    description=(
+        'Usuario del JWT. Incluye `modulos`: menú según rol(es) y plan. '
+        'Superusuario: módulos fijos; con `is_admin` suma gestión tenant.'
+    ),
     tags=['Autenticación'],
 )
-class MeUserView(generics.RetrieveAPIView):
-    serializer_class = serializers.MeUserSerializer
+class MeUsuarioView(generics.RetrieveAPIView):
+    serializer_class = serializers.MeUsuarioSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_object(self):
@@ -81,163 +85,133 @@ class MeUserView(generics.RetrieveAPIView):
 
 
 @tag_read_only(TAG_USUARIOS)
-class UserViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = User.objects.all()
-    serializer_class = serializers.UserSerializer
+class UsuarioViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Usuario.objects.all()
+    serializer_class = serializers.UsuarioSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         qs = self.queryset.order_by('id')
         if _openapi_unscoped(self):
             return qs
-        if self.request.user.is_staff:
+        if is_staff_super_or_admin(self.request.user):
             return qs
         return qs.filter(pk=self.request.user.pk)
 
 
 @tag_model_viewset(TAG_USUARIOS)
-class PersonViewSet(viewsets.ModelViewSet):
-    queryset = Person.objects.select_related('user')
-    serializer_class = serializers.PersonSerializer
+class PersonaViewSet(viewsets.ModelViewSet):
+    queryset = Persona.objects.select_related('usuario')
+    serializer_class = serializers.PersonaSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
         if self.action in ('create', 'destroy'):
             return [permissions.IsAuthenticated(), IsStaffMember()]
         if self.action in ('update', 'partial_update', 'retrieve'):
-            return [permissions.IsAuthenticated(), PersonObjectPermission()]
+            return [permissions.IsAuthenticated(), PersonaObjectPermission()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         qs = self.queryset.order_by('id')
         if _openapi_unscoped(self):
             return qs
-        if self.request.user.is_staff:
+        if is_staff_super_or_admin(self.request.user):
             return qs
-        return qs.filter(user=self.request.user)
+        return qs.filter(usuario=self.request.user)
 
 
-@tag_model_viewset(TAG_USUARIOS)
-class AuthProviderViewSet(viewsets.ModelViewSet):
-    queryset = AuthProvider.objects.all().order_by('sort_order', 'code')
-    serializer_class = serializers.AuthProviderSerializer
+@tag_model_viewset(TAG_CATALOGO)
+class ModuloViewSet(viewsets.ModelViewSet):
+    serializer_class = serializers.ModuloSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
-
-
-@tag_model_viewset(TAG_USUARIOS)
-class UserIdentityViewSet(viewsets.ModelViewSet):
-    queryset = UserIdentity.objects.select_related('user', 'provider')
-    serializer_class = serializers.UserIdentitySerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_permissions(self):
-        if self.action in ('list', 'retrieve'):
-            return [permissions.IsAuthenticated()]
-        return [permissions.IsAuthenticated(), IsStaffMember()]
 
     def get_queryset(self):
-        qs = self.queryset.order_by(
-            '-is_primary', 'provider__sort_order', 'provider__code'
-        )
-        if _openapi_unscoped(self):
-            return qs
-        if self.request.user.is_staff:
-            return qs
-        return qs.filter(user=self.request.user)
+        user = self.request.user
+
+        if user.is_superuser:
+            modulos = Modulo.objects.filter(codigo__in=['modulo'])
+        elif user.is_admin:
+            modulos =  Modulo.objects.filter(activo=True)
+        else:
+            modulos = Modulo.objects.all()
+        print(f"[ModuloViewSet] user={user} superuser={user.is_superuser} admin={getattr(user, 'is_admin', None)}", flush=True)
+        for x in modulos:
+            print(x.codigo)
+        return modulos.order_by('codigo')
 
 
 @tag_model_viewset(TAG_CATALOGO)
-class ModuleViewSet(viewsets.ModelViewSet):
-    queryset = Module.objects.all().order_by('code')
-    serializer_class = serializers.ModuleSerializer
-    permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
-
-
-@tag_model_viewset(TAG_CATALOGO)
-class AppPermissionViewSet(viewsets.ModelViewSet):
-    queryset = AppPermission.objects.select_related('module').order_by('code')
-    serializer_class = serializers.AppPermissionSerializer
-    permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
-
-
-@tag_model_viewset(TAG_CATALOGO)
-class RoleViewSet(viewsets.ModelViewSet):
-    queryset = Role.objects.prefetch_related('permissions').order_by('code')
-    serializer_class = serializers.RoleSerializer
-    permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
-
-
-@tag_model_viewset(TAG_CATALOGO)
-class ModuleRoleViewSet(viewsets.ModelViewSet):
-    queryset = ModuleRole.objects.select_related('role', 'module')
-    serializer_class = serializers.ModuleRoleSerializer
+class RolEmpresaViewSet(viewsets.ModelViewSet):
+    queryset = RolEmpresa.objects.prefetch_related('rol_modulos').order_by('codigo')
+    serializer_class = serializers.RolEmpresaSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
 
 
 @tag_model_viewset(TAG_CATALOGO)
 class PlanViewSet(viewsets.ModelViewSet):
-    queryset = Plan.objects.prefetch_related('modules').order_by('display_order', 'code')
+    queryset = Plan.objects.prefetch_related('plan_modulos').order_by('orden_presentacion', 'codigo')
     serializer_class = serializers.PlanSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
 
 
 @tag_model_viewset(TAG_CATALOGO)
-class PlanModuleViewSet(viewsets.ModelViewSet):
-    queryset = PlanModule.objects.select_related('plan', 'module')
-    serializer_class = serializers.PlanModuleSerializer
+class PlanModuloViewSet(viewsets.ModelViewSet):
+    queryset = PlanModulo.objects.select_related('plan', 'modulo')
+    serializer_class = serializers.PlanModuloSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
 
 
 @tag_model_viewset(TAG_CATALOGO)
-class SubscriptionStatusViewSet(viewsets.ModelViewSet):
-    queryset = SubscriptionStatus.objects.all().order_by('sort_order', 'code')
-    serializer_class = serializers.SubscriptionStatusSerializer
+class EstadoSuscripcionViewSet(viewsets.ModelViewSet):
+    queryset = EstadoSuscripcion.objects.all().order_by('orden', 'codigo')
+    serializer_class = serializers.EstadoSuscripcionSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
 
 
 @tag_model_viewset(TAG_FACTURACION)
-class BillingAccountViewSet(viewsets.ModelViewSet):
-    queryset = BillingAccount.objects.all()
-    serializer_class = serializers.BillingAccountSerializer
+class CuentaFacturacionViewSet(viewsets.ModelViewSet):
+    queryset = CuentaFacturacion.objects.all()
+    serializer_class = serializers.CuentaFacturacionSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
 
     def get_queryset(self):
-        qs = self.queryset.order_by('-created_at')
+        qs = self.queryset.order_by('-creado_en')
         if _openapi_unscoped(self):
             return qs
-        ba_ids = _billing_account_ids_for_user(self.request.user)
-        if ba_ids is None:
+        cf_ids = _cuenta_facturacion_ids_for_user(self.request.user)
+        if cf_ids is None:
             return qs
-        return qs.filter(id__in=ba_ids)
+        return qs.filter(id__in=cf_ids)
 
 
 @tag_model_viewset(TAG_FACTURACION)
-class SubscriptionViewSet(viewsets.ModelViewSet):
-    queryset = Subscription.objects.select_related('billing_account', 'plan', 'status')
-    serializer_class = serializers.SubscriptionSerializer
+class SuscripcionViewSet(viewsets.ModelViewSet):
+    queryset = Suscripcion.objects.select_related('cuenta_facturacion', 'plan', 'estado')
+    serializer_class = serializers.SuscripcionSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
 
     def get_queryset(self):
-        qs = self.queryset.order_by('-created_at')
+        qs = self.queryset.order_by('-creado_en')
         if _openapi_unscoped(self):
             return qs
-        ba_ids = _billing_account_ids_for_user(self.request.user)
-        if ba_ids is None:
+        cf_ids = _cuenta_facturacion_ids_for_user(self.request.user)
+        if cf_ids is None:
             return qs
-        return qs.filter(billing_account_id__in=ba_ids)
+        return qs.filter(cuenta_facturacion_id__in=cf_ids)
 
 
 @tag_model_viewset(TAG_TENANCY)
 class EmpresaViewSet(viewsets.ModelViewSet):
-    queryset = Empresa.objects.select_related('billing_account')
+    queryset = Empresa.objects.select_related('cuenta_facturacion')
     serializer_class = serializers.EmpresaSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
 
     def get_queryset(self):
-        qs = self.queryset.order_by('name')
+        qs = self.queryset.order_by('nombre')
         if _openapi_unscoped(self):
             return qs
-        if self.request.user.is_staff:
+        if is_staff_super_or_admin(self.request.user):
             return qs
         eids = _active_empresa_ids(self.request.user)
         return qs.filter(id__in=eids)
@@ -250,10 +224,10 @@ class OrganizacionViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
 
     def get_queryset(self):
-        qs = self.queryset.order_by('name')
+        qs = self.queryset.order_by('nombre')
         if _openapi_unscoped(self):
             return qs
-        if self.request.user.is_staff:
+        if is_staff_super_or_admin(self.request.user):
             return qs
         eids = _active_empresa_ids(self.request.user)
         return qs.filter(empresa_id__in=eids)
@@ -266,55 +240,52 @@ class SucursalViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
 
     def get_queryset(self):
-        qs = self.queryset.order_by('name')
+        qs = self.queryset.order_by('nombre')
         if _openapi_unscoped(self):
             return qs
-        if self.request.user.is_staff:
+        if is_staff_super_or_admin(self.request.user):
             return qs
         eids = _active_empresa_ids(self.request.user)
         return qs.filter(organizacion__empresa_id__in=eids)
 
 
 @tag_model_viewset(TAG_TENANCY)
-class PersonEmpresaViewSet(viewsets.ModelViewSet):
-    queryset = PersonEmpresa.objects.select_related('person', 'person__user', 'empresa')
-    serializer_class = serializers.PersonEmpresaSerializer
+class PersonaEmpresaViewSet(viewsets.ModelViewSet):
+    queryset = PersonaEmpresa.objects.select_related('persona', 'persona__usuario', 'empresa')
+    serializer_class = serializers.PersonaEmpresaSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
 
     def get_queryset(self):
-        qs = self.queryset.order_by('-joined_at')
+        qs = self.queryset.order_by('-ingreso_en')
         if _openapi_unscoped(self):
             return qs
-        if self.request.user.is_staff:
+        if is_staff_super_or_admin(self.request.user):
             return qs
         try:
-            person = self.request.user.person
-        except Person.DoesNotExist:
-            return PersonEmpresa.objects.none()
-        return qs.filter(person=person)
+            persona = self.request.user.persona
+        except Persona.DoesNotExist:
+            return PersonaEmpresa.objects.none()
+        return qs.filter(persona=persona)
 
 
 @tag_model_viewset(TAG_TENANCY)
-class PersonRoleAssignmentViewSet(viewsets.ModelViewSet):
-    queryset = PersonRoleAssignment.objects.select_related(
-        'person',
-        'person__user',
-        'role',
-        'empresa',
-        'organizacion',
-        'sucursal',
+class RolPersonaEmpresaViewSet(viewsets.ModelViewSet):
+    queryset = RolPersonaEmpresa.objects.select_related(
+        'persona',
+        'persona__usuario',
+        'rol',
     )
-    serializer_class = serializers.PersonRoleAssignmentSerializer
+    serializer_class = serializers.RolPersonaEmpresaSerializer
     permission_classes = [permissions.IsAuthenticated, IsStaffOrReadOnly]
 
     def get_queryset(self):
         qs = self.queryset
         if _openapi_unscoped(self):
             return qs
-        if self.request.user.is_staff:
+        if is_staff_super_or_admin(self.request.user):
             return qs
         try:
-            person = self.request.user.person
-        except Person.DoesNotExist:
+            persona = self.request.user.persona
+        except Persona.DoesNotExist:
             return qs.none()
-        return qs.filter(person=person)
+        return qs.filter(persona=persona)

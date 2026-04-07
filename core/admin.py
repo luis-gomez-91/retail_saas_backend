@@ -3,37 +3,53 @@ from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.utils.translation import gettext_lazy as _
 
 from core.models import (
-    AppPermission,
-    AuthProvider,
-    BillingAccount,
+    CuentaFacturacion,
     Empresa,
-    Module,
-    ModuleRole,
+    EstadoSuscripcion,
+    Modulo,
     Organizacion,
-    Person,
-    PersonEmpresa,
-    PersonRoleAssignment,
+    Persona,
+    PersonaEmpresa,
     Plan,
-    PlanModule,
-    Role,
-    Subscription,
-    SubscriptionStatus,
+    PlanModulo,
+    RolEmpresa,
+    RolModulo,
+    RolPersonaEmpresa,
+    Suscripcion,
     Sucursal,
-    User,
-    UserIdentity,
+    Usuario,
 )
 
 
-@admin.register(User)
-class UserAdmin(DjangoUserAdmin):
+@admin.register(Usuario)
+class UsuarioAdmin(DjangoUserAdmin):
     ordering = ('username',)
-    list_display = ('username', 'is_staff', 'is_superuser', 'is_active', 'last_login')
-    list_filter = ('is_staff', 'is_superuser', 'is_active')
+    list_display = (
+        'username',
+        'is_staff',
+        'is_superuser',
+        'is_admin',
+        'is_active',
+        'last_login',
+    )
+    list_filter = ('is_staff', 'is_superuser', 'is_admin', 'is_active')
     search_fields = ('username',)
     filter_horizontal = ('groups', 'user_permissions')
     fieldsets = (
         (None, {'fields': ('username', 'password')}),
-        (_('Permissions'), {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        (
+            _('Permissions'),
+            {
+                'fields': (
+                    'is_active',
+                    'is_staff',
+                    'is_superuser',
+                    'is_admin',
+                    'groups',
+                    'user_permissions',
+                )
+            },
+        ),
         (_('Important dates'), {'fields': ('last_login', 'date_joined')}),
     )
     add_fieldsets = (
@@ -41,100 +57,84 @@ class UserAdmin(DjangoUserAdmin):
             None,
             {
                 'classes': ('wide',),
-                'fields': ('username', 'password1', 'password2', 'is_staff', 'is_superuser'),
+                'fields': (
+                    'username',
+                    'password1',
+                    'password2',
+                    'is_staff',
+                    'is_superuser',
+                    'is_admin',
+                ),
             },
         ),
     )
 
 
-@admin.register(AuthProvider)
-class AuthProviderAdmin(admin.ModelAdmin):
-    list_display = ('code', 'name', 'is_active', 'sort_order')
-    list_editable = ('is_active', 'sort_order')
-    search_fields = ('code', 'name')
-    ordering = ('sort_order', 'code')
+@admin.register(Persona)
+class PersonaAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'telefono', 'creado_en')
+    search_fields = ('usuario__username', 'telefono', 'nombre', 'apellido_paterno')
 
 
-@admin.register(Person)
-class PersonAdmin(admin.ModelAdmin):
-    list_display = ('user', 'phone', 'created_at')
-    search_fields = ('user__username', 'phone', 'name', 'last_name')
-
-
-@admin.register(UserIdentity)
-class UserIdentityAdmin(admin.ModelAdmin):
-    list_display = ('user', 'provider', 'provider_uid', 'is_primary', 'created_at')
-    list_filter = ('provider', 'is_primary')
-    autocomplete_fields = ('user', 'provider')
-
-
-class PlanModuleInline(admin.TabularInline):
-    model = PlanModule
+class PlanModuloInline(admin.TabularInline):
+    model = PlanModulo
     extra = 0
-    autocomplete_fields = ('module',)
+    autocomplete_fields = ('modulo',)
 
 
 @admin.register(Plan)
 class PlanAdmin(admin.ModelAdmin):
     list_display = (
-        'name',
-        'code',
+        'nombre',
+        'codigo',
         'max_empresas',
         'max_organizaciones',
         'max_sucursales',
-        'is_public',
-        'display_order',
+        'publico',
+        'orden_presentacion',
     )
-    list_editable = ('display_order', 'is_public')
-    search_fields = ('name', 'code')
-    inlines = [PlanModuleInline]
+    list_editable = ('orden_presentacion', 'publico')
+    search_fields = ('nombre', 'codigo')
+    inlines = [PlanModuloInline]
 
 
-@admin.register(Module)
-class ModuleAdmin(admin.ModelAdmin):
-    search_fields = ('code', 'name')
-    ordering = ('code',)
+@admin.register(Modulo)
+class ModuloAdmin(admin.ModelAdmin):
+    list_display = ('codigo', 'nombre', 'icono')
+    search_fields = ('codigo', 'nombre', 'icono')
+    ordering = ('codigo',)
 
 
-@admin.register(AppPermission)
-class AppPermissionAdmin(admin.ModelAdmin):
-    list_display = ('code', 'name', 'module')
-    list_filter = ('module',)
-    search_fields = ('code', 'name')
-    autocomplete_fields = ('module',)
-
-
-class ModuleRoleInline(admin.TabularInline):
-    model = ModuleRole
+class RolModuloInline(admin.TabularInline):
+    model = RolModulo
     extra = 0
-    autocomplete_fields = ('module',)
+    autocomplete_fields = ('modulo',)
 
 
-@admin.register(Role)
-class RoleAdmin(admin.ModelAdmin):
-    list_display = ('name', 'code')
-    search_fields = ('name', 'code')
-    filter_horizontal = ('permissions',)
-    inlines = [ModuleRoleInline]
+@admin.register(RolEmpresa)
+class RolEmpresaAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'codigo')
+    search_fields = ('nombre', 'codigo')
+    inlines = [RolModuloInline]
 
 
-@admin.register(SubscriptionStatus)
-class SubscriptionStatusAdmin(admin.ModelAdmin):
-    list_display = ('code', 'name', 'is_active', 'sort_order')
-    list_editable = ('is_active', 'sort_order')
-    search_fields = ('code', 'name')
-    ordering = ('sort_order', 'code')
+@admin.register(EstadoSuscripcion)
+class EstadoSuscripcionAdmin(admin.ModelAdmin):
+    list_display = ('codigo', 'nombre', 'activo', 'orden')
+    list_editable = ('activo', 'orden')
+    search_fields = ('codigo', 'nombre')
+    ordering = ('orden', 'codigo')
 
 
-@admin.register(Subscription)
-class SubscriptionAdmin(admin.ModelAdmin):
-    list_display = ('billing_account', 'plan', 'status', 'current_period_end', 'created_at')
-    list_filter = ('status', 'plan')
-    autocomplete_fields = ('billing_account', 'plan', 'status')
+@admin.register(Suscripcion)
+class SuscripcionAdmin(admin.ModelAdmin):
+    list_display = ('cuenta_facturacion', 'plan', 'estado', 'fin_periodo_actual', 'creado_en')
+    list_filter = ('estado', 'plan')
+    autocomplete_fields = ('cuenta_facturacion', 'plan', 'estado')
 
 
-class SubscriptionInline(admin.TabularInline):
-    model = Subscription
+class SuscripcionInline(admin.TabularInline):
+    model = Suscripcion
     extra = 0
     autocomplete_fields = ('plan',)
 
@@ -142,21 +142,21 @@ class SubscriptionInline(admin.TabularInline):
 class EmpresaInline(admin.TabularInline):
     model = Empresa
     extra = 0
-    prepopulated_fields = {'slug': ('name',)}
+    prepopulated_fields = {'slug': ('nombre',)}
 
 
-@admin.register(BillingAccount)
-class BillingAccountAdmin(admin.ModelAdmin):
-    search_fields = ('name',)
-    inlines = [SubscriptionInline, EmpresaInline]
+@admin.register(CuentaFacturacion)
+class CuentaFacturacionAdmin(admin.ModelAdmin):
+    search_fields = ('nombre',)
+    inlines = [SuscripcionInline, EmpresaInline]
 
 
 @admin.register(Empresa)
 class EmpresaAdmin(admin.ModelAdmin):
-    list_display = ('name', 'slug', 'billing_account')
-    search_fields = ('name', 'slug')
-    autocomplete_fields = ('billing_account',)
-    prepopulated_fields = {'slug': ('name',)}
+    list_display = ('nombre', 'slug', 'cuenta_facturacion')
+    search_fields = ('nombre', 'slug')
+    autocomplete_fields = ('cuenta_facturacion',)
+    prepopulated_fields = {'slug': ('nombre',)}
 
 
 class SucursalInline(admin.TabularInline):
@@ -166,27 +166,34 @@ class SucursalInline(admin.TabularInline):
 
 @admin.register(Organizacion)
 class OrganizacionAdmin(admin.ModelAdmin):
-    list_display = ('name', 'empresa')
-    search_fields = ('name',)
+    list_display = ('nombre', 'empresa')
+    search_fields = ('nombre',)
     autocomplete_fields = ('empresa',)
     inlines = [SucursalInline]
 
 
 @admin.register(Sucursal)
 class SucursalAdmin(admin.ModelAdmin):
-    list_display = ('name', 'organizacion')
-    search_fields = ('name',)
+    list_display = ('nombre', 'organizacion')
+    search_fields = ('nombre',)
     autocomplete_fields = ('organizacion',)
 
 
-@admin.register(PersonEmpresa)
-class PersonEmpresaAdmin(admin.ModelAdmin):
-    list_display = ('person', 'empresa', 'is_active', 'joined_at')
-    list_filter = ('is_active',)
-    autocomplete_fields = ('person', 'empresa')
+@admin.register(PersonaEmpresa)
+class PersonaEmpresaAdmin(admin.ModelAdmin):
+    list_display = ('persona', 'empresa', 'activa', 'ingreso_en')
+    list_filter = ('activa',)
+    search_fields = (
+        'persona__usuario__username',
+        'persona__nombre',
+        'persona__apellido_paterno',
+        'empresa__nombre',
+        'empresa__slug',
+    )
+    autocomplete_fields = ('persona', 'empresa')
 
 
-@admin.register(PersonRoleAssignment)
-class PersonRoleAssignmentAdmin(admin.ModelAdmin):
-    list_display = ('person', 'role', 'empresa', 'organizacion', 'sucursal')
-    autocomplete_fields = ('person', 'role', 'empresa', 'organizacion', 'sucursal')
+@admin.register(RolPersonaEmpresa)
+class RolPersonaEmpresaAdmin(admin.ModelAdmin):
+    list_display = ('persona', 'rol')
+    autocomplete_fields = ('persona', 'rol')

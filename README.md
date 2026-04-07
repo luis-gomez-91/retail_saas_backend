@@ -1,6 +1,6 @@
 # Retail SaaS Backend
 
-API REST en **Django** con **Django REST Framework** para un producto retail multitenant: empresas, organizaciones, sucursales, planes, suscripciones, facturación y **RBAC** (módulos, permisos, roles). Autenticación con **JWT** (Simple JWT).
+API REST en **Django** con **Django REST Framework** para un producto retail multitenant: empresas, organizaciones, sucursales, planes, suscripciones, facturación y **RBAC** (módulos por rol). Autenticación con **JWT** (Simple JWT).
 
 ## Requisitos
 
@@ -21,7 +21,7 @@ Crea un archivo `.env` en la raíz del repositorio si necesitas base de datos di
 DATABASE_URL=postgresql://usuario:contraseña@localhost:5432/nombre_bd
 ```
 
-Aplica migraciones y (solo desarrollo) deja datos de ejemplo y usuario `admin` / `admin`:
+Aplica migraciones y (solo desarrollo) crea usuario `admin` / `admin` y un registro `Persona` asociado:
 
 ```bash
 python manage.py migrate
@@ -29,6 +29,8 @@ python manage.py bootstrap_dev
 ```
 
 > `bootstrap_dev` solo corre con `DEBUG=True` o con `ALLOW_BOOTSTRAP=1` (no usar en producción de forma habitual).
+
+Para cargar el catálogo (módulos, planes, estados de suscripción, etc.) ejecuta aparte `python manage.py seed_saas_catalog`.
 
 ## Servidor de desarrollo
 
